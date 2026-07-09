@@ -166,7 +166,7 @@ export default function AssetDetailPage() {
     resolver: zodResolver(assetSchema) as any,
     values: {
       name: asset?.name ?? "",
-      category_id: asset?.asset_category_id ?? "",
+      category_id: asset?.category_id ?? "",
       branch_id: asset?.branch_id ?? "",
       room_id: asset?.room_id ?? "",
       brand: asset?.brand ?? "",
@@ -213,14 +213,14 @@ export default function AssetDetailPage() {
         .from("assets")
         .update({
           name: data.name,
-          asset_category_id: data.category_id,
+          category_id: data.category_id,
           branch_id: data.branch_id,
           room_id: data.room_id,
           brand: data.brand || null,
           model: data.model || null,
           serial_number: data.serial_number || null,
           purchase_date: data.purchase_date || null,
-          purchase_price: data.purchase_price || null,
+          purchase_price: data.purchase_price != null ? data.purchase_price : null,
           warranty_expiry: data.warranty_expiry || null,
           condition: data.condition,
           status: data.status,
@@ -259,7 +259,7 @@ export default function AssetDetailPage() {
           to_branch_id: room.branch_id,
           from_room_id: asset.room_id,
           to_room_id: transferRoomId,
-          reason: transferNotes || null,
+          notes: transferNotes || null,
         })
       if (transferError) throw transferError
 

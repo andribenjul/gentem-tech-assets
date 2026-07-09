@@ -103,7 +103,7 @@ export default function AssetsPage() {
 
       if (branchFilter) query = query.eq("branch_id", branchFilter)
       if (roomFilter) query = query.eq("room_id", roomFilter)
-      if (categoryFilter) query = query.eq("asset_category_id", categoryFilter)
+      if (categoryFilter) query = query.eq("category_id", categoryFilter)
       if (statusFilter) query = query.eq("status", statusFilter)
       if (debouncedSearch) {
         query = query.or(
@@ -189,21 +189,22 @@ export default function AssetsPage() {
   const createMutation = useMutation({
     mutationFn: async (data: AssetFormData) => {
       const supabase = createClient()
-      const { error } = await supabase.from("assets").insert({
+      const payload = {
         name: data.name,
-        asset_category_id: data.category_id,
+        category_id: data.category_id,
         branch_id: data.branch_id,
         room_id: data.room_id,
         brand: data.brand || null,
         model: data.model || null,
         serial_number: data.serial_number || null,
         purchase_date: data.purchase_date || null,
-        purchase_price: data.purchase_price || null,
+        purchase_price: data.purchase_price != null ? data.purchase_price : null,
         warranty_expiry: data.warranty_expiry || null,
         condition: data.condition,
         status: data.status,
         notes: data.notes || null,
-      })
+      }
+      const { error } = await supabase.from("assets").insert(payload)
       if (error) throw error
     },
     onSuccess: () => {
