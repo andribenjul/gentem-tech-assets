@@ -58,7 +58,7 @@ interface Branch {
 interface EmployeeRecord {
   id: string
   employee_id_number: string
-  name: string
+  full_name: string
   position: string | null
   department: string | null
   phone: string | null
@@ -116,10 +116,10 @@ export default function EmployeesPage() {
       let query = supabase
         .from("employees")
         .select("*, branches(name)", { count: "exact" })
-        .order("name")
+        .order("full_name")
 
       if (search) {
-        query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%`)
+        query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`)
       }
       if (branchFilter !== "all") {
         query = query.eq("branch_id", branchFilter)
@@ -157,7 +157,7 @@ export default function EmployeesPage() {
     (employee: EmployeeRecord) => {
       setEditingEmployee(employee)
       reset({
-        full_name: employee.name,
+        full_name: employee.full_name,
         email: employee.email ?? "",
         phone: employee.phone ?? "",
         branch_id: employee.branch_id ?? "",
@@ -186,10 +186,14 @@ export default function EmployeesPage() {
 
   const createMutation = useMutation({
     mutationFn: async (data: EmployeeFormData) => {
-      const { full_name, ...rest } = data
       const { error } = await supabase.from("employees").insert({
-        name: full_name,
-        ...rest,
+        full_name: data.full_name,
+        email: data.email || null,
+        phone: data.phone || null,
+        branch_id: data.branch_id || null,
+        position: data.position || null,
+        department: data.department || null,
+        is_active: data.is_active,
       })
       if (error) throw error
     },
@@ -203,10 +207,18 @@ export default function EmployeesPage() {
 
   const updateMutation = useMutation({
     mutationFn: async (data: EmployeeFormData & { id: string }) => {
-      const { id, full_name, ...values } = data
+      const { id, full_name, email, phone, branch_id, position, department, is_active } = data
       const { error } = await supabase
         .from("employees")
-        .update({ name: full_name, ...values })
+        .update({
+          full_name,
+          email: email || null,
+          phone: phone || null,
+          branch_id: branch_id || null,
+          position: position || null,
+          department: department || null,
+          is_active,
+        })
         .eq("id", id)
       if (error) throw error
     },
@@ -334,7 +346,7 @@ export default function EmployeesPage() {
                           href={`/employees/${employee.id}`}
                           className="font-medium hover:underline"
                         >
-                          {employee.name}
+                          {employee.full_name}
                         </Link>
                       </TableCell>
                       <TableCell>{employee.email ?? "-"}</TableCell>
