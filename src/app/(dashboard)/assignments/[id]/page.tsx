@@ -419,7 +419,7 @@ export default function AssignmentDetailPage() {
                     href={`/employees/${assignment.employee.id}`}
                     className="text-primary hover:underline"
                   >
-                    {assignment.employee.name}
+                    {assignment.employee.full_name}
                   </Link>
                 ) : (
                   "-"

@@ -221,7 +221,6 @@ export default function DashboardPage() {
 
   const getEmployeeName = (item: any) => {
     if (item.employees?.full_name) return item.employees.full_name
-    if (item.employees?.name) return item.employees.name
     return "—"
   }
 

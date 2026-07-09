@@ -68,7 +68,7 @@ export interface Employee {
   id: string
   branch_id: string | null
   employee_id_number: string
-  name: string
+  full_name: string
   position: string | null
   department: string | null
   phone: string | null

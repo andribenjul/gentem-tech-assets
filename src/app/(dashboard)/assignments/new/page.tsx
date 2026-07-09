@@ -96,7 +96,7 @@ export default function NewAssignmentPage() {
         .from("employees")
         .select("*")
         .eq("is_active", true)
-        .order("name")
+        .order("full_name")
       return (data ?? []) as Employee[]
     },
   })
@@ -128,7 +128,7 @@ export default function NewAssignmentPage() {
 
   const filteredEmployees = employees?.filter(
     (e) =>
-      e.name.toLowerCase().includes(employeeSearch.toLowerCase()) ||
+      e.full_name.toLowerCase().includes(employeeSearch.toLowerCase()) ||
       e.employee_id_number
         ?.toLowerCase()
         .includes(employeeSearch.toLowerCase())
@@ -155,7 +155,7 @@ export default function NewAssignmentPage() {
           documentNumber={assignment.documentNumber}
           date={format(new Date(assignment.assigned_date), "dd MMMM yyyy")}
           place={selectedBranch?.name ?? "Jakarta"}
-          employeeName={selectedEmployee?.name ?? ""}
+          employeeName={selectedEmployee?.full_name ?? ""}
           employeePosition={selectedEmployee?.position ?? "-"}
           employeeDepartment={selectedEmployee?.department ?? "-"}
           assetTag={selectedAsset?.asset_tag ?? ""}
@@ -311,7 +311,7 @@ export default function NewAssignmentPage() {
                         onClick={() => setShowEmployeeDropdown(!showEmployeeDropdown)}
                       >
                         {field.value && selectedEmployee
-                          ? `${selectedEmployee.name} (${selectedEmployee.employee_id_number})`
+                          ? `${selectedEmployee.full_name} (${selectedEmployee.employee_id_number})`
                           : "Select employee..."}
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
@@ -357,7 +357,7 @@ export default function NewAssignmentPage() {
                                     )}
                                   />
                                   <div>
-                                    <p className="font-medium">{emp.name}</p>
+                                     <p className="font-medium">{emp.full_name}</p>
                                     <p className="text-xs text-muted-foreground">
                                       {emp.position ?? "-"} - {emp.department ?? "-"}
                                     </p>

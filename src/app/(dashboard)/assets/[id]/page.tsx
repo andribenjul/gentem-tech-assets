@@ -803,7 +803,7 @@ export default function AssetDetailPage() {
               <div>
                 <p className="text-sm text-muted-foreground">Employee</p>
                 <p className="font-medium">
-                  {(activeAssignment as any).employee?.name ?? "Unknown"}
+                  {(activeAssignment as any).employee?.full_name ?? "Unknown"}
                 </p>
               </div>
               <div>

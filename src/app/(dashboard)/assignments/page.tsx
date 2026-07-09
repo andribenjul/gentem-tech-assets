@@ -35,7 +35,7 @@ import type { AssetAssignment, Employee, Asset, HandoverDocument } from "@/types
 
 type AssignmentWithRelations = AssetAssignment & {
   asset: Pick<Asset, "id" | "name" | "asset_tag">
-  employee: Pick<Employee, "id" | "name">
+  employee: Pick<Employee, "id" | "full_name">
   handover_document: Pick<HandoverDocument, "id" | "document_number"> | null
 }
 
@@ -81,9 +81,9 @@ export default function AssignmentsPage() {
     queryFn: async () => {
       const { data } = await supabase
         .from("employees")
-        .select("id, name")
+        .select("id, full_name")
         .eq("is_active", true)
-        .order("name")
+        .order("full_name")
       return data ?? []
     },
   })
@@ -221,7 +221,7 @@ export default function AssignmentsPage() {
                 <SelectItem value="all">All Employees</SelectItem>
                 {employees?.map((emp) => (
                   <SelectItem key={emp.id} value={emp.id}>
-                    {emp.name}
+                    {emp.full_name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -282,7 +282,7 @@ export default function AssignmentsPage() {
                       {assignment.handover_document?.document_number ?? "-"}
                     </TableCell>
                     <TableCell>{assignment.asset?.name}</TableCell>
-                    <TableCell>{assignment.employee?.name}</TableCell>
+                    <TableCell>{assignment.employee?.full_name}</TableCell>
                     <TableCell>
                       <Badge className={typeBadgeClass(assignment.assignment_type)}>
                         {assignment.assignment_type}

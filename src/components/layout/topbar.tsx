@@ -108,7 +108,7 @@ export function Topbar({ pageTitle, onMenuToggle }: TopbarProps) {
             ) : (
               notifications.map((n: any) => {
                 const isOverdue = n.status === "Overdue"
-                const employeeName = n.employees?.full_name ?? n.employees?.name ?? "—"
+                const employeeName = n.employees?.full_name ?? "—"
                 const assetName = n.assets?.name ?? "—"
                 return (
                   <Link

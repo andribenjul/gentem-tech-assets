@@ -55,7 +55,7 @@ interface Branch {
 interface EmployeeDetail {
   id: string
   employee_id_number: string
-  name: string
+  full_name: string
   position: string | null
   department: string | null
   phone: string | null
@@ -185,7 +185,7 @@ export default function EmployeeDetailPage() {
   const openEditDialog = useCallback(() => {
     if (!employeeQuery.data) return
     reset({
-      full_name: employeeQuery.data.name,
+      full_name: employeeQuery.data.full_name,
       email: employeeQuery.data.email ?? "",
       phone: employeeQuery.data.phone ?? "",
       branch_id: employeeQuery.data.branch_id ?? "",
@@ -200,8 +200,8 @@ export default function EmployeeDetailPage() {
     updateMutation.mutate(data)
   }
 
-  const initials = employeeQuery.data?.name
-    ? employeeQuery.data.name
+  const initials = employeeQuery.data?.full_name
+    ? employeeQuery.data.full_name
         .split(" ")
         .map((n) => n[0])
         .join("")
@@ -257,7 +257,7 @@ export default function EmployeeDetailPage() {
             <div className="flex-1 space-y-4">
               <div className="flex items-start justify-between">
                 <div>
-                  <h2 className="text-xl font-semibold">{employee.name}</h2>
+                  <h2 className="text-xl font-semibold">{employee.full_name}</h2>
                   <p className="text-sm text-muted-foreground">
                     ID: {employee.employee_id_number}
                   </p>
