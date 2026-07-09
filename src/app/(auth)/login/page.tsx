@@ -39,16 +39,25 @@ export default function LoginPage() {
 
   const onSubmit = async (data: LoginForm) => {
     setLoading(true)
-    const supabase = createClient()
-    const { error } = await supabase.auth.signInWithPassword(data)
-    setLoading(false)
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.auth.signInWithPassword(data)
 
-    if (error) {
-      toast.error(error.message)
-      return
+      if (error) {
+        toast.error(error.message)
+        return
+      }
+
+      router.push("/dashboard")
+      router.refresh()
+    } catch (err) {
+      console.error("Login error:", err)
+      toast.error(
+        err instanceof Error ? err.message : "Terjadi kesalahan saat login. Cek console untuk detail."
+      )
+    } finally {
+      setLoading(false)
     }
-
-    router.push("/dashboard")
   }
 
   return (
