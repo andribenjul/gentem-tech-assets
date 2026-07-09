@@ -119,7 +119,7 @@ export default function AssetDetailPage() {
         .from("asset_assignments")
         .select(`
           *,
-          employee:employees(name)
+          employee:employees(full_name)
         `)
         .eq("asset_id", id)
         .is("returned_date", null)

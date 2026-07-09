@@ -119,7 +119,7 @@ export default function AssignmentsPage() {
           `
           *,
           asset:assets(id, name, asset_tag),
-          employee:employees(id, name),
+          employee:employees(id, full_name),
           handover_document:handover_documents(id, document_number)
         `,
           { count: "exact" }

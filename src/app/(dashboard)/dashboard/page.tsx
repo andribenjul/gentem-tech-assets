@@ -144,7 +144,7 @@ async function fetchLoansDueOrOverdue() {
   const { data, error } = await supabase
     .from("asset_assignments")
     .select(
-      "id, assigned_date, due_date, status, assignment_type, notes, assets(id, name, asset_tag), employees(id, full_name, name)"
+      "id, assigned_date, due_date, status, assignment_type, notes, assets(id, name, asset_tag), employees(id, full_name)"
     )
     .or(
       `and(assignment_type.eq.Loan,status.eq.Active,due_date.lte.${threeDaysFromNowStr}),status.eq.Overdue`

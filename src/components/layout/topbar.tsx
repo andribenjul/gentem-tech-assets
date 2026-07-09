@@ -41,7 +41,7 @@ export function Topbar({ pageTitle, onMenuToggle }: TopbarProps) {
       const now = new Date().toISOString()
       const { data, error } = await supabase
         .from("asset_assignments")
-        .select("id, due_date, status, assignment_type, assets(name), employees(full_name, name)")
+        .select("id, due_date, status, assignment_type, assets(name), employees(full_name)")
         .or(`and(assignment_type.eq.Loan,status.eq.Active,due_date.lte.${now}),status.eq.Overdue`)
         .order("due_date", { ascending: true })
         .limit(10)
