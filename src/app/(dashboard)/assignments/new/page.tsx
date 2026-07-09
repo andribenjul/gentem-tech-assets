@@ -248,7 +248,7 @@ export default function NewAssignmentPage() {
 
       return { assignment, handoverDoc, pdfBlob }
     },
-    onSuccess: ({ pdfBlob }: { pdfBlob: Blob }) => {
+    onSuccess: ({ pdfBlob }) => {
       const url = URL.createObjectURL(pdfBlob)
       setPdfPreviewUrl(url)
       setShowPdfModal(true)

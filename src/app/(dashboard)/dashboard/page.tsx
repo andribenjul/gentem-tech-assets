@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query"
 import { createClient } from "@/lib/supabase/client"
-import { formatDate } from "@/lib/utils"
+import { formatDate, getStatusTextColor } from "@/lib/utils"
 import { toast } from "sonner"
 import {
   Package,
