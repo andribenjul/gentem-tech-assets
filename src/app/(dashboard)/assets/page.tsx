@@ -189,6 +189,13 @@ export default function AssetsPage() {
   const createMutation = useMutation({
     mutationFn: async (data: AssetFormData) => {
       const supabase = createClient()
+      if (!data.category_id || !data.branch_id || !data.room_id) {
+        throw new Error("Category, Branch, and Room wajib diisi")
+      }
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      if (!uuidRegex.test(data.category_id)) throw new Error("Category ID tidak valid")
+      if (!uuidRegex.test(data.branch_id)) throw new Error("Branch ID tidak valid")
+      if (!uuidRegex.test(data.room_id)) throw new Error("Room ID tidak valid")
       const payload = {
         name: data.name,
         category_id: data.category_id,
@@ -215,7 +222,8 @@ export default function AssetsPage() {
       setPriceDisplay("")
     },
     onError: (error) => {
-      toast.error(error.message)
+      console.error("Create asset error:", error)
+      toast.error(String(error?.message || error))
     },
   })
 
