@@ -209,13 +209,14 @@ export default function AssignmentDetailPage() {
         .from("bast-documents")
         .getPublicUrl(filePath)
 
-      if (handoverDoc && publicUrl.publicUrl) {
-        const { error: docError } = await supabase
-          .from("handover_documents")
-          .update({ file_url: publicUrl.publicUrl })
-          .eq("id", handoverDoc.id)
-        if (docError) throw docError
-      }
+      const { error: docError } = await supabase
+        .from("handover_documents")
+        .insert({
+          assignment_id: id,
+          document_number: returnDocNumber,
+          generated_pdf_url: publicUrl.publicUrl,
+        })
+      if (docError) throw docError
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["assignment", id] })

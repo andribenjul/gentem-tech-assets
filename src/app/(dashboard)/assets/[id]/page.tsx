@@ -889,7 +889,7 @@ export default function AssetDetailPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <User className="h-5 w-5" />
-            Assignment History
+            Asset History
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -900,7 +900,7 @@ export default function AssetDetailPage() {
                 <TableHead>Type</TableHead>
                 <TableHead>Assigned Date</TableHead>
                 <TableHead>Returned Date</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="text-right">Document</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -915,9 +915,8 @@ export default function AssetDetailPage() {
                 </TableRow>
               ) : (
                 assignmentHistory.map((ah: any) => {
-                  const doc = ah.handover_document
-                  const docUrl =
-                    doc?.signed_pdf_url ?? doc?.generated_pdf_url
+                  const docs = ah.handover_document
+                  const docList = Array.isArray(docs) ? docs : docs ? [docs] : []
                   return (
                     <TableRow key={ah.id}>
                       <TableCell className="font-medium">
@@ -932,82 +931,49 @@ export default function AssetDetailPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span tabIndex={0}>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  disabled={!docUrl}
-                                  onClick={() => {
-                                    if (docUrl) {
-                                      window.open(docUrl, "_blank")
-                                    }
-                                  }}
-                                >
-                                  <FileText className="h-4 w-4" />
-                                </Button>
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              {docUrl
-                                ? "View Document"
-                                : "Dokumen belum tersedia"}
-                            </TooltipContent>
-                          </Tooltip>
+                          {docList.length === 0 ? (
+                            <span className="text-xs text-muted-foreground">
+                              -
+                            </span>
+                          ) : (
+                            docList.map((doc: any, i: number) => {
+                              const docUrl =
+                                doc?.signed_pdf_url ?? doc?.generated_pdf_url
+                              const isReturn = doc?.document_number?.startsWith("RET/")
+                              return (
+                                <Tooltip key={doc.id ?? i}>
+                                  <TooltipTrigger asChild>
+                                    <span tabIndex={0}>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        disabled={!docUrl}
+                                        onClick={() => {
+                                          if (docUrl) {
+                                            window.open(docUrl, "_blank")
+                                          }
+                                        }}
+                                      >
+                                        <FileText className="h-4 w-4" />
+                                      </Button>
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    {docUrl
+                                      ? isReturn
+                                        ? "Return Receipt"
+                                        : "BAST Document"
+                                      : "Dokumen belum tersedia"}
+                                  </TooltipContent>
+                                </Tooltip>
+                              )
+                            })
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
                   )
                 })
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <History className="h-5 w-5" />
-            Transfer History
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>From</TableHead>
-                <TableHead>To</TableHead>
-                <TableHead>Reason</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {(!transfers || transfers.length === 0) ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={4}
-                    className="text-center text-muted-foreground py-8"
-                  >
-                    No transfer history
-                  </TableCell>
-                </TableRow>
-              ) : (
-                transfers.map((t: any) => (
-                  <TableRow key={t.id}>
-                    <TableCell>{formatDate(t.transfer_date)}</TableCell>
-                    <TableCell>
-                      {t.from_branch?.name ?? "-"}
-                      {t.from_room?.name ? ` / ${t.from_room.name}` : ""}
-                    </TableCell>
-                    <TableCell>
-                      {t.to_branch?.name ?? "-"}
-                      {t.to_room?.name ? ` / ${t.to_room.name}` : ""}
-                    </TableCell>
-                    <TableCell>{t.reason ?? "-"}</TableCell>
-                  </TableRow>
-                ))
               )}
             </TableBody>
           </Table>
