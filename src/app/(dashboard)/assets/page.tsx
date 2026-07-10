@@ -271,6 +271,42 @@ export default function AssetsPage() {
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const supabase = createClient()
+
+      const { data: handoverDocs } = await supabase
+        .from("handover_documents")
+        .select("id, generated_pdf_url, signed_pdf_url")
+        .eq("assignment_id", id)
+
+      for (const doc of handoverDocs ?? []) {
+        if (doc.generated_pdf_url) {
+          const path = doc.generated_pdf_url.split("/bast-documents/")[1]
+          if (path) {
+            await supabase.storage.from("bast-documents").remove([path])
+          }
+        }
+        if (doc.signed_pdf_url) {
+          const path = doc.signed_pdf_url.split("/signed-documents/")[1]
+          if (path) {
+            await supabase.storage.from("signed-documents").remove([path])
+          }
+        }
+      }
+
+      await supabase.from("handover_documents").delete().eq("assignment_id", id)
+
+      const { data: assignments } = await supabase
+        .from("asset_assignments")
+        .select("id")
+        .eq("asset_id", id)
+
+      for (const a of assignments ?? []) {
+        await supabase.from("handover_documents").delete().eq("assignment_id", a.id)
+      }
+
+      await supabase.from("asset_assignments").delete().eq("asset_id", id)
+
+      await supabase.from("asset_transfers").delete().eq("asset_id", id)
+
       const { error } = await supabase.from("assets").delete().eq("id", id)
       if (error) throw error
     },
@@ -280,7 +316,7 @@ export default function AssetsPage() {
       setDeleteId(null)
     },
     onError: (error) => {
-      toast.error(error.message)
+      toast.error(error.message || "Gagal menghapus aset")
     },
   })
 

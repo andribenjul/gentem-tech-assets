@@ -1,11 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { createClient } from "@/lib/supabase/client"
 import { formatDate } from "@/lib/utils"
 import { format } from "date-fns"
+import { pdf } from "@react-pdf/renderer"
 import { Document, Page } from "react-pdf"
 import { pdfjs } from "react-pdf"
 import { toast } from "sonner"
@@ -49,8 +50,16 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Separator } from "@/components/ui/separator"
+import { ReturnReceipt } from "@/components/pdf/return-receipt"
 import type { AssetAssignment, Employee, Asset, HandoverDocument, Branch } from "@/types"
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -97,6 +106,8 @@ export default function AssignmentDetailPage() {
 
   const [showReturnDialog, setShowReturnDialog] = useState(false)
   const [conditionAtReturn, setConditionAtReturn] = useState("")
+  const [returnBranchId, setReturnBranchId] = useState("")
+  const [returnRoomId, setReturnRoomId] = useState("")
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [numPages, setNumPages] = useState<number | null>(null)
 
@@ -123,32 +134,92 @@ export default function AssignmentDetailPage() {
 
   const returnMutation = useMutation({
     mutationFn: async () => {
+      if (!assignment) throw new Error("Assignment not found")
+      if (!returnBranchId) throw new Error("Silakan pilih cabang tujuan pengembalian")
+
+      const room = rooms?.find((r) => r.id === returnRoomId)
+      const branch = branches?.find((b) => b.id === returnBranchId)
+      if (!branch) throw new Error("Cabang tidak ditemukan")
+
+      const assetData = assignment.asset
+      const employeeData = assignment.employee
+      const handoverDoc = assignment.handover_documents?.[0]
+
+      const updateData: Record<string, any> = {
+        returned_date: format(new Date(), "yyyy-MM-dd"),
+        status: "Returned",
+        branch_id: returnBranchId,
+        room_id: returnRoomId || null,
+      }
       const { error: assignError } = await supabase
         .from("asset_assignments")
-        .update({
-          returned_date: format(new Date(), "yyyy-MM-dd"),
-          status: "Returned",
-        })
+        .update(updateData)
         .eq("id", id)
-
       if (assignError) throw assignError
 
-      if (assignment?.asset_id) {
+      if (assignment.asset_id) {
+        const assetUpdate: Record<string, any> = {
+          status: "Available",
+          branch_id: returnBranchId,
+          room_id: returnRoomId || null,
+        }
         const { error: assetError } = await supabase
           .from("assets")
-          .update({ status: "Available" })
+          .update(assetUpdate)
           .eq("id", assignment.asset_id)
-
         if (assetError) throw assetError
       }
 
-      const handoverDoc = assignment?.handover_documents?.[0]
+      const returnDate = format(new Date(), "dd MMMM yyyy")
+      const place = branch.name
+
+      const returnDocNumber = handoverDoc
+        ? `RET/${handoverDoc.document_number}`
+        : `RET/${format(new Date(), "yyyyMM")}/${id.slice(0, 8).toUpperCase()}`
+
+      const returnReceiptBlob = await pdf(
+        <ReturnReceipt
+          documentNumber={returnDocNumber}
+          date={returnDate}
+          place={place}
+          employeeName={employeeData?.full_name ?? ""}
+          employeePosition={employeeData?.position ?? "-"}
+          employeeDepartment={employeeData?.department ?? "-"}
+          assetTag={assetData?.asset_tag ?? ""}
+          assetName={assetData?.name ?? ""}
+          assetBrand={assetData?.brand ?? null}
+          assetModel={assetData?.model ?? null}
+          assetSerialNumber={assetData?.serial_number ?? null}
+          assignmentType={assignment.assignment_type}
+          dueDate={assignment.due_date}
+          conditionAtReturn={conditionAtReturn || ""}
+          returnBranch={branch.name}
+          returnRoom={room?.name ?? ""}
+        />
+      ).toBlob()
+
+      const filePath = `return/${id}/${returnDocNumber}.pdf`
+
+      const { error: uploadError } = await supabase.storage
+        .from("bast-documents")
+        .upload(filePath, returnReceiptBlob, {
+          contentType: "application/pdf",
+          upsert: true,
+        })
+      if (uploadError) throw uploadError
+
+      const { data: publicUrl } = supabase.storage
+        .from("bast-documents")
+        .getPublicUrl(filePath)
+
       if (handoverDoc) {
         const { error: docError } = await supabase
           .from("handover_documents")
-          .update({ condition_at_return: conditionAtReturn || null })
+          .update({
+            condition_at_return: conditionAtReturn || null,
+            file_url: publicUrl.publicUrl,
+          })
           .eq("id", handoverDoc.id)
-
         if (docError) throw docError
       }
     },
@@ -157,6 +228,9 @@ export default function AssignmentDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["assignments"] })
       toast.success("Asset marked as returned successfully!")
       setShowReturnDialog(false)
+      setConditionAtReturn("")
+      setReturnBranchId("")
+      setReturnRoomId("")
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to mark as returned")
@@ -260,6 +334,35 @@ export default function AssignmentDetailPage() {
       uploadSignedMutation.mutate(file)
     }
   }
+
+  const { data: branches } = useQuery({
+    queryKey: ["branches"],
+    queryFn: async () => {
+      const supabase = createClient()
+      const { data } = await supabase.from("branches").select("*").order("name")
+      return data ?? []
+    },
+  })
+
+  const { data: rooms } = useQuery({
+    queryKey: ["rooms"],
+    queryFn: async () => {
+      const supabase = createClient()
+      const { data } = await supabase.from("rooms").select("*").order("name")
+      return data ?? []
+    },
+  })
+
+  const returnFilteredRooms =
+    rooms?.filter((r) => r.branch_id === returnBranchId) ?? []
+
+  const prevReturnBranchRef = useRef(returnBranchId)
+  useEffect(() => {
+    if (prevReturnBranchRef.current && prevReturnBranchRef.current !== returnBranchId) {
+      setReturnRoomId("")
+    }
+    prevReturnBranchRef.current = returnBranchId
+  }, [returnBranchId])
 
   if (isLoading) {
     return (
@@ -622,6 +725,44 @@ export default function AssignmentDetailPage() {
               </Card>
             )}
             <div className="space-y-2">
+              <Label>Return Destination Branch</Label>
+              <Select value={returnBranchId} onValueChange={setReturnBranchId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  {branches?.map((b: any) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      {b.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Return Destination Room</Label>
+              <Select
+                value={returnRoomId}
+                onValueChange={setReturnRoomId}
+                disabled={!returnBranchId}
+              >
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={
+                      returnBranchId ? "Select room" : "Select branch first"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {returnFilteredRooms.map((r: any) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="condition">Condition at Return</Label>
               <Textarea
                 id="condition"
@@ -634,13 +775,17 @@ export default function AssignmentDetailPage() {
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setShowReturnDialog(false)}
+              onClick={() => {
+                setShowReturnDialog(false)
+                setReturnBranchId("")
+                setReturnRoomId("")
+              }}
             >
               Cancel
             </Button>
             <Button
               onClick={() => returnMutation.mutate()}
-              disabled={returnMutation.isPending}
+              disabled={returnMutation.isPending || !returnBranchId}
             >
               {returnMutation.isPending && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
