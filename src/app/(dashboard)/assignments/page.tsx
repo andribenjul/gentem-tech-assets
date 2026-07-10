@@ -54,7 +54,7 @@ import type { AssetAssignment, Employee, Asset, HandoverDocument } from "@/types
 type AssignmentWithRelations = AssetAssignment & {
   asset: Pick<Asset, "id" | "name" | "asset_tag">
   employee: Pick<Employee, "id" | "full_name">
-  handover_documents: Pick<
+  docs: Pick<
     HandoverDocument,
     "id" | "document_number" | "generated_pdf_url" | "signed_pdf_url" | "signed_at"
   >[]
@@ -141,7 +141,7 @@ export default function AssignmentsPage() {
           *,
           asset:assets(id, name, asset_tag),
           employee:employees(id, full_name),
-          handover_documents:handover_documents(*)
+          docs:handover_documents(id, document_number, generated_pdf_url, signed_pdf_url, signed_at)
         `,
           { count: "exact" }
         )
@@ -160,7 +160,7 @@ export default function AssignmentsPage() {
       }
       if (search) {
         query = query.or(
-          `handover_document.document_number.ilike.%${search}%,asset.name.ilike.%${search}%`
+          `docs.document_number.ilike.%${search}%,asset.name.ilike.%${search}%`
         )
       }
 
@@ -172,7 +172,15 @@ export default function AssignmentsPage() {
         .range(from, to)
 
       if (error) throw error
-      return { data: (data as unknown as AssignmentWithRelations[]) ?? [], count: count ?? 0 }
+      const normalized = ((data as any[]) ?? []).map((item: any) => ({
+        ...item,
+        docs: Array.isArray(item.docs)
+          ? item.docs
+          : item.docs
+            ? [item.docs]
+            : [],
+      }))
+      return { data: normalized as unknown as AssignmentWithRelations[], count: count ?? 0 }
     },
   })
 
@@ -300,7 +308,7 @@ export default function AssignmentsPage() {
                   </TableRow>
                 ) : (
                   assignmentsData?.data.map((assignment) => {
-                    const docs = assignment.handover_documents ?? []
+                    const docs = assignment.docs ?? []
                     const bastDoc = docs.find(
                       (d) => !d.document_number?.startsWith("RET/")
                     )
