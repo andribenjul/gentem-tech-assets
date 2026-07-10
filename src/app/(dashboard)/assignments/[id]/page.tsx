@@ -206,6 +206,7 @@ export default function AssignmentDetailPage() {
       const handoverDoc = assignment?.handover_documents?.[0]
       if (!handoverDoc) throw new Error("No handover document found")
 
+      const oldGeneratedUrl = handoverDoc.generated_pdf_url
       const filePath = `signed/${id}/${handoverDoc.document_number}-signed.pdf`
 
       const { error: uploadError } = await supabase.storage
@@ -226,13 +227,22 @@ export default function AssignmentDetailPage() {
         .update({
           signed_pdf_url: publicUrl.publicUrl,
           signed_at: new Date().toISOString(),
+          generated_pdf_url: null,
         })
         .eq("id", handoverDoc.id)
 
       if (updateError) throw updateError
+
+      if (oldGeneratedUrl) {
+        const path = oldGeneratedUrl.split("/bast-documents/")[1]
+        if (path) {
+          await supabase.storage.from("bast-documents").remove([path])
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["assignment", id] })
+      queryClient.invalidateQueries({ queryKey: ["assignments"] })
       toast.success("Signed PDF uploaded successfully!")
     },
     onError: (error: Error) => {

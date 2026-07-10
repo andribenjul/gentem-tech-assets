@@ -50,6 +50,39 @@ interface CategoryRecord {
   assets: { count: number }[]
 }
 
+function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+}
+
+async function generateUniqueCode(
+  supabase: ReturnType<typeof createClient>,
+  name: string,
+  excludeId?: string
+): Promise<string> {
+  const base = slugify(name)
+  let code = base
+  let suffix = 2
+  while (true) {
+    let query = supabase
+      .from("asset_categories")
+      .select("id", { count: "exact", head: true })
+      .eq("code", code)
+    if (excludeId) {
+      query = query.neq("id", excludeId)
+    }
+    const { count } = await query
+    if (count === 0) return code
+    code = `${base}-${suffix}`
+    suffix++
+  }
+}
+
 export default function CategoriesPage() {
   const queryClient = useQueryClient()
   const supabase = createClient()
@@ -65,7 +98,7 @@ export default function CategoriesPage() {
     formState: { errors },
   } = useForm<AssetCategoryFormData>({
     resolver: zodResolver(assetCategorySchema),
-    defaultValues: { name: "", code: "", description: "" },
+    defaultValues: { name: "", description: "" },
   })
 
   const categoriesQuery = useQuery({
@@ -87,7 +120,7 @@ export default function CategoriesPage() {
 
   const openCreateDialog = useCallback(() => {
     setEditingCategory(null)
-    reset({ name: "", code: "", description: "" })
+    reset({ name: "", description: "" })
     setDialogOpen(true)
   }, [reset])
 
@@ -96,7 +129,6 @@ export default function CategoriesPage() {
       setEditingCategory(category)
       reset({
         name: category.name,
-        code: category.code,
         description: category.description ?? "",
       })
       setDialogOpen(true)
@@ -107,12 +139,17 @@ export default function CategoriesPage() {
   const closeDialog = useCallback(() => {
     setDialogOpen(false)
     setEditingCategory(null)
-    reset({ name: "", code: "", description: "" })
+    reset({ name: "", description: "" })
   }, [reset])
 
   const createMutation = useMutation({
     mutationFn: async (data: AssetCategoryFormData) => {
-      const { error } = await supabase.from("asset_categories").insert(data)
+      const code = await generateUniqueCode(supabase, data.name)
+      const { error } = await supabase.from("asset_categories").insert({
+        name: data.name,
+        code,
+        description: data.description || null,
+      })
       if (error) throw error
     },
     onSuccess: () => {
@@ -126,7 +163,15 @@ export default function CategoriesPage() {
   const updateMutation = useMutation({
     mutationFn: async (data: AssetCategoryFormData & { id: string }) => {
       const { id, ...values } = data
-      const { error } = await supabase.from("asset_categories").update(values).eq("id", id)
+      const code = await generateUniqueCode(supabase, values.name, id)
+      const { error } = await supabase
+        .from("asset_categories")
+        .update({
+          name: values.name,
+          code,
+          description: values.description || null,
+        })
+        .eq("id", id)
       if (error) throw error
     },
     onSuccess: () => {
@@ -274,26 +319,12 @@ export default function CategoriesPage() {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Name</Label>
-                  <Input id="name" placeholder="Category name" {...register("name")} />
-                  {errors.name && (
-                    <p className="text-sm text-destructive">{errors.name.message}</p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="code">Code</Label>
-                  <Input
-                    id="code"
-                    placeholder="e.g. IT-001"
-                    maxLength={10}
-                    {...register("code")}
-                  />
-                  {errors.code && (
-                    <p className="text-sm text-destructive">{errors.code.message}</p>
-                  )}
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="name">Name</Label>
+                <Input id="name" placeholder="Category name" {...register("name")} />
+                {errors.name && (
+                  <p className="text-sm text-destructive">{errors.name.message}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="description">Description</Label>

@@ -1,12 +1,12 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
-import { Pencil, ArrowRight, History, User } from "lucide-react"
+import { Pencil, ArrowRight, History, User, FileText } from "lucide-react"
 import { z } from "zod"
 
 import { createClient } from "@/lib/supabase/client"
@@ -45,6 +45,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -67,9 +73,12 @@ export default function AssetDetailPage() {
   const params = useParams()
   const router = useRouter()
   const queryClient = useQueryClient()
+  const searchParams = useSearchParams()
   const id = params.id as string
 
-  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [editDialogOpen, setEditDialogOpen] = useState(
+    searchParams.get("edit") === "true"
+  )
   const [transferDialogOpen, setTransferDialogOpen] = useState(false)
 
   const { data: asset, isLoading } = useQuery({
@@ -129,6 +138,24 @@ export default function AssetDetailPage() {
     },
   })
 
+  const { data: assignmentHistory } = useQuery({
+    queryKey: ["assignment-history", id],
+    queryFn: async () => {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from("asset_assignments")
+        .select(`
+          *,
+          employee:employees(full_name),
+          handover_document:handover_documents(id, document_number, generated_pdf_url, signed_pdf_url)
+        `)
+        .eq("asset_id", id)
+        .order("assigned_date", { ascending: false })
+      if (error) throw error
+      return data ?? []
+    },
+  })
+
   const { data: rooms } = useQuery({
     queryKey: ["rooms"],
     queryFn: async () => {
@@ -169,6 +196,7 @@ export default function AssetDetailPage() {
       category_id: asset?.category_id ?? "",
       branch_id: asset?.branch_id ?? "",
       room_id: asset?.room_id ?? "",
+      asset_tag: asset?.asset_tag ?? "",
       brand: asset?.brand ?? "",
       model: asset?.model ?? "",
       serial_number: asset?.serial_number ?? "",
@@ -209,28 +237,38 @@ export default function AssetDetailPage() {
   const updateMutation = useMutation({
     mutationFn: async (data: AssetFormData) => {
       const supabase = createClient()
+      const payload: Record<string, any> = {
+        name: data.name,
+        category_id: data.category_id,
+        branch_id: data.branch_id,
+        room_id: data.room_id,
+        brand: data.brand || null,
+        model: data.model || null,
+        serial_number: data.serial_number || null,
+        purchase_date: data.purchase_date || null,
+        purchase_price: data.purchase_price != null ? data.purchase_price : null,
+        warranty_expiry: data.warranty_expiry || null,
+        condition: data.condition,
+        status: data.status,
+        notes: data.notes || null,
+      }
+      if (data.asset_tag) {
+        payload.asset_tag = data.asset_tag
+      }
       const { error } = await supabase
         .from("assets")
-        .update({
-          name: data.name,
-          category_id: data.category_id,
-          branch_id: data.branch_id,
-          room_id: data.room_id,
-          brand: data.brand || null,
-          model: data.model || null,
-          serial_number: data.serial_number || null,
-          purchase_date: data.purchase_date || null,
-          purchase_price: data.purchase_price != null ? data.purchase_price : null,
-          warranty_expiry: data.warranty_expiry || null,
-          condition: data.condition,
-          status: data.status,
-          notes: data.notes || null,
-        })
+        .update(payload)
         .eq("id", id)
-      if (error) throw error
+      if (error) {
+        if (error.message?.includes("asset_tag") && error.code === "23505") {
+          throw new Error("Asset tag sudah digunakan")
+        }
+        throw error
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["asset", id] })
+      queryClient.invalidateQueries({ queryKey: ["assets"] })
       toast.success("Asset updated successfully")
       setEditDialogOpen(false)
     },
@@ -306,7 +344,8 @@ export default function AssetDetailPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <TooltipProvider>
+      <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{asset.name}</h1>
@@ -508,6 +547,21 @@ export default function AssetDetailPage() {
                               ))}
                             </SelectContent>
                           </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      name="asset_tag"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Asset Tag</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="Leave empty for auto-generate"
+                              {...field}
+                            />
+                          </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -834,6 +888,87 @@ export default function AssetDetailPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
+            <User className="h-5 w-5" />
+            Assignment History
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Employee</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Assigned Date</TableHead>
+                <TableHead>Returned Date</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {(!assignmentHistory || assignmentHistory.length === 0) ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={5}
+                    className="text-center text-muted-foreground py-8"
+                  >
+                    No assignment history
+                  </TableCell>
+                </TableRow>
+              ) : (
+                assignmentHistory.map((ah: any) => {
+                  const doc = ah.handover_document
+                  const docUrl =
+                    doc?.signed_pdf_url ?? doc?.generated_pdf_url
+                  return (
+                    <TableRow key={ah.id}>
+                      <TableCell className="font-medium">
+                        {ah.employee?.full_name ?? "Unknown"}
+                      </TableCell>
+                      <TableCell>{ah.assignment_type}</TableCell>
+                      <TableCell>{formatDate(ah.assigned_date)}</TableCell>
+                      <TableCell>
+                        {ah.returned_date
+                          ? formatDate(ah.returned_date)
+                          : "Active"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span tabIndex={0}>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  disabled={!docUrl}
+                                  onClick={() => {
+                                    if (docUrl) {
+                                      window.open(docUrl, "_blank")
+                                    }
+                                  }}
+                                >
+                                  <FileText className="h-4 w-4" />
+                                </Button>
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {docUrl
+                                ? "View Document"
+                                : "Dokumen belum tersedia"}
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
             <History className="h-5 w-5" />
             Transfer History
           </CardTitle>
@@ -879,5 +1014,6 @@ export default function AssetDetailPage() {
         </CardContent>
       </Card>
     </div>
+    </TooltipProvider>
   )
 }

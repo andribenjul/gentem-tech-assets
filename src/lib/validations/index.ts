@@ -15,7 +15,7 @@ export const roomSchema = z.object({
 
 export const assetCategorySchema = z.object({
   name: z.string().min(1, "Category name is required"),
-  code: z.string().min(2).max(10),
+  code: z.string().min(2).max(10).optional(),
   description: z.string().optional(),
 });
 
@@ -24,6 +24,7 @@ export const assetSchema = z.object({
   category_id: z.string().uuid(),
   room_id: z.string().uuid(),
   branch_id: z.string().uuid(),
+  asset_tag: z.string().optional(),
   brand: z.string().optional(),
   model: z.string().optional(),
   serial_number: z.string().optional(),
