@@ -347,7 +347,23 @@ export default function AssignmentsPage() {
                                 </TooltipTrigger>
                                 <TooltipContent>BAST Document</TooltipContent>
                               </Tooltip>
-                            ) : null}
+                            ) : (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span tabIndex={0}>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      disabled
+                                    >
+                                      <FileText className="h-4 w-4 text-muted-foreground/40" />
+                                    </Button>
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>BAST tidak tersedia</TooltipContent>
+                              </Tooltip>
+                            )}
                             {returnDoc?.generated_pdf_url ? (
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -364,11 +380,23 @@ export default function AssignmentsPage() {
                                 </TooltipTrigger>
                                 <TooltipContent>Return Receipt</TooltipContent>
                               </Tooltip>
-                            ) : null}
-                            {!bastDoc?.generated_pdf_url &&
-                              !returnDoc?.generated_pdf_url && (
-                                <span className="text-muted-foreground text-sm">-</span>
-                              )}
+                            ) : (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span tabIndex={0}>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      disabled
+                                    >
+                                      <FileText className="h-4 w-4 text-muted-foreground/40" />
+                                    </Button>
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>Return receipt tidak tersedia</TooltipContent>
+                              </Tooltip>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
