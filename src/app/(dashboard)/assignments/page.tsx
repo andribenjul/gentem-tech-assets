@@ -1,16 +1,13 @@
 "use client"
 
 import { useState } from "react"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@tanstack/react-query"
 import { createClient } from "@/lib/supabase/client"
 import {
   Plus,
   Search,
   FileText,
-  Upload,
-  CheckCircle2,
   MoreHorizontal,
-  Loader2,
 } from "lucide-react"
 import Link from "next/link"
 import { formatDate } from "@/lib/utils"
@@ -18,7 +15,6 @@ import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import {
   Select,
   SelectContent,
@@ -42,14 +38,6 @@ import {
 } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog"
-import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -66,10 +54,10 @@ import type { AssetAssignment, Employee, Asset, HandoverDocument } from "@/types
 type AssignmentWithRelations = AssetAssignment & {
   asset: Pick<Asset, "id" | "name" | "asset_tag">
   employee: Pick<Employee, "id" | "full_name">
-  handover_document: Pick<
+  handover_documents: Pick<
     HandoverDocument,
     "id" | "document_number" | "generated_pdf_url" | "signed_pdf_url" | "signed_at"
-  > | null
+  >[]
 }
 
 const PAGE_SIZE = 10
@@ -98,25 +86,8 @@ const typeBadgeClass = (type: string) => {
   }
 }
 
-const docStatusBadgeClass = (
-  doc: Pick<HandoverDocument, "generated_pdf_url" | "signed_pdf_url"> | null
-) => {
-  if (!doc?.generated_pdf_url) return "border-transparent bg-gray-400 text-white"
-  if (!doc.signed_pdf_url) return "border border-yellow-400 text-yellow-600 bg-yellow-50"
-  return "border-transparent bg-green-500 text-white"
-}
-
-const docStatusLabel = (
-  doc: Pick<HandoverDocument, "generated_pdf_url" | "signed_pdf_url"> | null
-) => {
-  if (!doc?.generated_pdf_url) return "No Document"
-  if (!doc.signed_pdf_url) return "Pending Signature"
-  return "Signed"
-}
-
 export default function AssignmentsPage() {
   const supabase = createClient()
-  const queryClient = useQueryClient()
 
   const [page, setPage] = useState(1)
   const [statusFilter, setStatusFilter] = useState("all")
@@ -125,9 +96,6 @@ export default function AssignmentsPage() {
   const [branchFilter, setBranchFilter] = useState("all")
   const [search, setSearch] = useState("")
   const [searchInput, setSearchInput] = useState("")
-  const [uploadDialogAssignment, setUploadDialogAssignment] =
-    useState<AssignmentWithRelations | null>(null)
-  const [uploadFile, setUploadFile] = useState<File | null>(null)
 
   const { data: employees } = useQuery({
     queryKey: ["employees", "active"],
@@ -173,7 +141,7 @@ export default function AssignmentsPage() {
           *,
           asset:assets(id, name, asset_tag),
           employee:employees(id, full_name),
-          handover_document:handover_documents(id, document_number, generated_pdf_url, signed_pdf_url, signed_at)
+          handover_documents:handover_documents(*)
         `,
           { count: "exact" }
         )
@@ -207,70 +175,6 @@ export default function AssignmentsPage() {
       return { data: (data as unknown as AssignmentWithRelations[]) ?? [], count: count ?? 0 }
     },
   })
-
-  const uploadSignedMutation = useMutation({
-    mutationFn: async ({
-      assignment,
-      file,
-    }: {
-      assignment: AssignmentWithRelations
-      file: File
-    }) => {
-      const handoverDoc = assignment.handover_document
-      if (!handoverDoc) throw new Error("No handover document found")
-
-      const oldGeneratedUrl = handoverDoc.generated_pdf_url
-      const filePath = `signed/${assignment.id}/${handoverDoc.document_number}-signed.pdf`
-
-      const { error: uploadError } = await supabase.storage
-        .from("signed-documents")
-        .upload(filePath, file, {
-          contentType: "application/pdf",
-          upsert: true,
-        })
-
-      if (uploadError) throw uploadError
-
-      const { data: publicUrl } = supabase.storage
-        .from("signed-documents")
-        .getPublicUrl(filePath)
-
-      const { error: updateError } = await supabase
-        .from("handover_documents")
-        .update({
-          signed_pdf_url: publicUrl.publicUrl,
-          signed_at: new Date().toISOString(),
-          generated_pdf_url: null,
-        })
-        .eq("id", handoverDoc.id)
-
-      if (updateError) throw updateError
-
-      if (oldGeneratedUrl) {
-        const path = oldGeneratedUrl.split("/bast-documents/")[1]
-        if (path) {
-          await supabase.storage.from("bast-documents").remove([path])
-        }
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["assignments"] })
-      toast.success("Signed PDF uploaded successfully!")
-      setUploadDialogAssignment(null)
-      setUploadFile(null)
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || "Failed to upload signed PDF")
-    },
-  })
-
-  const handleUpload = () => {
-    if (!uploadDialogAssignment || !uploadFile) return
-    uploadSignedMutation.mutate({
-      assignment: uploadDialogAssignment,
-      file: uploadFile,
-    })
-  }
 
   const totalPages = Math.ceil((assignmentsData?.count ?? 0) / PAGE_SIZE)
 
@@ -396,17 +300,18 @@ export default function AssignmentsPage() {
                   </TableRow>
                 ) : (
                   assignmentsData?.data.map((assignment) => {
-                    const handoverDoc = assignment.handover_document
-                    const hasGeneratedPdf = !!handoverDoc?.generated_pdf_url
-                    const hasSignedPdf = !!handoverDoc?.signed_pdf_url
-                    const isUploading =
-                      uploadSignedMutation.isPending &&
-                      uploadDialogAssignment?.id === assignment.id
+                    const docs = assignment.handover_documents ?? []
+                    const bastDoc = docs.find(
+                      (d) => !d.document_number?.startsWith("RET/")
+                    )
+                    const returnDoc = docs.find(
+                      (d) => d.document_number?.startsWith("RET/")
+                    )
 
                     return (
                       <TableRow key={assignment.id}>
                         <TableCell className="font-medium">
-                          {handoverDoc?.document_number ?? "-"}
+                          {bastDoc?.document_number ?? "-"}
                         </TableCell>
                         <TableCell>{assignment.asset?.name}</TableCell>
                         <TableCell>{assignment.employee?.full_name}</TableCell>
@@ -425,9 +330,46 @@ export default function AssignmentsPage() {
                           {assignment.due_date ? formatDate(assignment.due_date) : "-"}
                         </TableCell>
                         <TableCell>
-                          <Badge className={docStatusBadgeClass(handoverDoc)}>
-                            {docStatusLabel(handoverDoc)}
-                          </Badge>
+                          <div className="flex items-center gap-1">
+                            {bastDoc?.generated_pdf_url ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() =>
+                                      window.open(bastDoc.generated_pdf_url!, "_blank")
+                                    }
+                                  >
+                                    <FileText className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>BAST Document</TooltipContent>
+                              </Tooltip>
+                            ) : null}
+                            {returnDoc?.generated_pdf_url ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() =>
+                                      window.open(returnDoc.generated_pdf_url!, "_blank")
+                                    }
+                                  >
+                                    <FileText className="h-4 w-4 text-orange-500" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Return Receipt</TooltipContent>
+                              </Tooltip>
+                            ) : null}
+                            {!bastDoc?.generated_pdf_url &&
+                              !returnDoc?.generated_pdf_url && (
+                                <span className="text-muted-foreground text-sm">-</span>
+                              )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
@@ -436,60 +378,6 @@ export default function AssignmentsPage() {
                               <Button variant="outline" size="sm" asChild>
                                 <Link href={`/assignments/${assignment.id}`}>View</Link>
                               </Button>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span tabIndex={0}>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      disabled={!hasGeneratedPdf}
-                                      onClick={() => {
-                                        if (handoverDoc?.generated_pdf_url) {
-                                          window.open(handoverDoc.generated_pdf_url, "_blank")
-                                        }
-                                      }}
-                                    >
-                                      <FileText className="h-4 w-4" />
-                                    </Button>
-                                  </span>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  {hasGeneratedPdf
-                                    ? "View PDF"
-                                    : "Dokumen belum tersedia"}
-                                </TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span tabIndex={0}>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      disabled={!hasGeneratedPdf || isUploading}
-                                      onClick={() => {
-                                        if (hasSignedPdf && handoverDoc?.signed_pdf_url) {
-                                          window.open(handoverDoc.signed_pdf_url, "_blank")
-                                        } else {
-                                          setUploadDialogAssignment(assignment)
-                                        }
-                                      }}
-                                    >
-                                      {hasSignedPdf ? (
-                                        <CheckCircle2 className="h-4 w-4 text-green-500" />
-                                      ) : (
-                                        <Upload className="h-4 w-4" />
-                                      )}
-                                    </Button>
-                                  </span>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  {!hasGeneratedPdf
-                                    ? "Dokumen belum tersedia"
-                                    : hasSignedPdf
-                                      ? "View Signed PDF"
-                                      : "Upload Signed PDF"}
-                                </TooltipContent>
-                              </Tooltip>
                             </div>
 
                             {/* Mobile dropdown */}
@@ -505,34 +393,6 @@ export default function AssignmentsPage() {
                                     <Link href={`/assignments/${assignment.id}`}>
                                       View
                                     </Link>
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    disabled={!hasGeneratedPdf}
-                                    onClick={() => {
-                                      if (handoverDoc?.generated_pdf_url) {
-                                        window.open(handoverDoc.generated_pdf_url, "_blank")
-                                      }
-                                    }}
-                                  >
-                                    <FileText className="mr-2 h-4 w-4" />
-                                    View PDF
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    disabled={!hasGeneratedPdf}
-                                    onClick={() => {
-                                      if (hasSignedPdf && handoverDoc?.signed_pdf_url) {
-                                        window.open(handoverDoc.signed_pdf_url, "_blank")
-                                      } else {
-                                        setUploadDialogAssignment(assignment)
-                                      }
-                                    }}
-                                  >
-                                    {hasSignedPdf ? (
-                                      <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
-                                    ) : (
-                                      <Upload className="mr-2 h-4 w-4" />
-                                    )}
-                                    {hasSignedPdf ? "View Signed PDF" : "Upload Signed PDF"}
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
@@ -574,83 +434,6 @@ export default function AssignmentsPage() {
           </div>
         )}
 
-        {/* Upload Signed PDF Dialog */}
-        <Dialog
-          open={!!uploadDialogAssignment}
-          onOpenChange={(open) => {
-            if (!open) {
-              setUploadDialogAssignment(null)
-              setUploadFile(null)
-            }
-          }}
-        >
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Upload Signed PDF</DialogTitle>
-              <DialogDescription>
-                Upload the signed BAST document for this assignment.
-              </DialogDescription>
-            </DialogHeader>
-            {uploadDialogAssignment && (
-              <div className="space-y-4 py-2">
-                <div className="space-y-1 text-sm">
-                  <p>
-                    <span className="font-medium">Asset:</span>{" "}
-                    {uploadDialogAssignment.asset?.name}
-                  </p>
-                  <p>
-                    <span className="font-medium">Employee:</span>{" "}
-                    {uploadDialogAssignment.employee?.full_name}
-                  </p>
-                  <p>
-                    <span className="font-medium">Document:</span>{" "}
-                    {uploadDialogAssignment.handover_document?.document_number}
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signed-pdf-upload">Signed PDF File</Label>
-                  <Input
-                    id="signed-pdf-upload"
-                    type="file"
-                    accept=".pdf,application/pdf"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (file) {
-                        if (file.type !== "application/pdf") {
-                          toast.error("Please upload a PDF file")
-                          return
-                        }
-                        setUploadFile(file)
-                      }
-                    }}
-                    disabled={uploadSignedMutation.isPending}
-                  />
-                </div>
-              </div>
-            )}
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setUploadDialogAssignment(null)
-                  setUploadFile(null)
-                }}
-                disabled={uploadSignedMutation.isPending}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleUpload}
-                disabled={!uploadFile || uploadSignedMutation.isPending}
-              >
-                {uploadSignedMutation.isPending && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
-                Upload
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
     </TooltipProvider>
   )
