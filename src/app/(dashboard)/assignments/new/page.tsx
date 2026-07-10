@@ -56,6 +56,7 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { BastTemplate } from "@/components/pdf/bast-template"
+import { useAuth } from "@/hooks/use-auth"
 import type { Employee, Asset } from "@/types"
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -148,6 +149,10 @@ export default function NewAssignmentPage() {
   )
   const selectedBranch = branches?.find((b) => b.id === selectedEmployee?.branch_id)
 
+  const { user } = useAuth()
+  const approverName =
+    user?.user_metadata?.full_name ?? user?.email ?? "IT Admin"
+
   const generatePdfBlob = useCallback(
     async (assignment: FormValues & { documentNumber: string }) => {
       const blob = await pdf(
@@ -169,11 +174,18 @@ export default function NewAssignmentPage() {
               ? format(new Date(assignment.due_date), "dd MMMM yyyy")
               : null
           }
+          branchName={selectedBranch?.name}
+          purchaseDate={
+            selectedAsset?.purchase_date
+              ? format(new Date(selectedAsset.purchase_date), "dd MMMM yyyy")
+              : undefined
+          }
+          approverName={approverName}
         />
       ).toBlob()
       return blob
     },
-    [selectedBranch, selectedEmployee, selectedAsset]
+    [selectedBranch, selectedEmployee, selectedAsset, approverName]
   )
 
   const createMutation = useMutation({
