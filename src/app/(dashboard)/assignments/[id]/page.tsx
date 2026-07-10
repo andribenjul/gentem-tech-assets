@@ -209,13 +209,10 @@ export default function AssignmentDetailPage() {
         .from("bast-documents")
         .getPublicUrl(filePath)
 
-      if (handoverDoc) {
+      if (handoverDoc && publicUrl.publicUrl) {
         const { error: docError } = await supabase
           .from("handover_documents")
-          .update({
-            condition_at_return: conditionAtReturn || null,
-            file_url: publicUrl.publicUrl,
-          })
+          .update({ file_url: publicUrl.publicUrl })
           .eq("id", handoverDoc.id)
         if (docError) throw docError
       }
