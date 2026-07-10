@@ -145,15 +145,12 @@ export default function AssignmentDetailPage() {
       const employeeData = assignment.employee
       const handoverDoc = assignment.handover_documents?.[0]
 
-      const updateData: Record<string, any> = {
-        returned_date: format(new Date(), "yyyy-MM-dd"),
-        status: "Returned",
-        branch_id: returnBranchId,
-        room_id: returnRoomId || null,
-      }
       const { error: assignError } = await supabase
         .from("asset_assignments")
-        .update(updateData)
+        .update({
+          returned_date: format(new Date(), "yyyy-MM-dd"),
+          status: "Returned",
+        })
         .eq("id", id)
       if (assignError) throw assignError
 
