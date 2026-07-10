@@ -1,0 +1,97 @@
+diff --git a/src/app/(dashboard)/assignments/[id]/page.tsx b/src/app/(dashboard)/assignments/[id]/page.tsx
+index 5ac7bb0..4e47964 100644
+--- a/src/app/(dashboard)/assignments/[id]/page.tsx
++++ b/src/app/(dashboard)/assignments/[id]/page.tsx
+@@ -150,6 +150,7 @@ export default function AssignmentDetailPage() {
+         .update({
+           returned_date: format(new Date(), "yyyy-MM-dd"),
+           status: "Returned",
++          condition_at_return: conditionAtReturn || null,
+         })
+         .eq("id", id)
+       if (assignError) throw assignError
+@@ -579,13 +580,13 @@ export default function AssignmentDetailPage() {
+                 </p>
+               </div>
+             )}
+-            {handoverDoc?.condition_at_return && (
++            {assignment?.condition_at_return && (
+               <div>
+                 <Label className="text-muted-foreground">
+                   Condition at Return
+                 </Label>
+                 <p className="font-medium">
+-                  {handoverDoc.condition_at_return}
++                  {assignment.condition_at_return}
+                 </p>
+               </div>
+             )}
+diff --git a/src/app/(dashboard)/assignments/page.tsx b/src/app/(dashboard)/assignments/page.tsx
+index 560b10b..3750711 100644
+--- a/src/app/(dashboard)/assignments/page.tsx
++++ b/src/app/(dashboard)/assignments/page.tsx
+@@ -315,6 +315,8 @@ export default function AssignmentsPage() {
+                     const returnDoc = docs.find(
+                       (d) => d.document_number?.startsWith("RET/")
+                     )
++                    const bastUrl = bastDoc?.signed_pdf_url ?? bastDoc?.generated_pdf_url ?? null
++                    const returnUrl = returnDoc?.signed_pdf_url ?? returnDoc?.generated_pdf_url ?? null
+ 
+                     return (
+                       <TableRow key={assignment.id}>
+@@ -339,7 +341,7 @@ export default function AssignmentsPage() {
+                         </TableCell>
+                         <TableCell>
+                           <div className="flex items-center gap-1">
+-                            {bastDoc?.generated_pdf_url ? (
++                            {bastUrl ? (
+                               <Tooltip>
+                                 <TooltipTrigger asChild>
+                                   <Button
+@@ -347,7 +349,7 @@ export default function AssignmentsPage() {
+                                     size="icon"
+                                     className="h-8 w-8"
+                                     onClick={() =>
+-                                      window.open(bastDoc.generated_pdf_url!, "_blank")
++                                      window.open(bastUrl, "_blank")
+                                     }
+                                   >
+                                     <FileText className="h-4 w-4" />
+@@ -372,7 +374,7 @@ export default function AssignmentsPage() {
+                                 <TooltipContent>BAST tidak tersedia</TooltipContent>
+                               </Tooltip>
+                             )}
+-                            {returnDoc?.generated_pdf_url ? (
++                            {returnUrl ? (
+                               <Tooltip>
+                                 <TooltipTrigger asChild>
+                                   <Button
+@@ -380,7 +382,7 @@ export default function AssignmentsPage() {
+                                     size="icon"
+                                     className="h-8 w-8"
+                                     onClick={() =>
+-                                      window.open(returnDoc.generated_pdf_url!, "_blank")
++                                      window.open(returnUrl, "_blank")
+                                     }
+                                   >
+                                     <FileText className="h-4 w-4 text-orange-500" />
+diff --git a/src/types/index.ts b/src/types/index.ts
+index 6e15e65..1fd01bd 100644
+--- a/src/types/index.ts
++++ b/src/types/index.ts
+@@ -89,6 +89,7 @@ export interface AssetAssignment {
+   status: string
+   assignment_type: string
+   due_date: string | null
++  condition_at_return: string | null
+   notes: string | null
+   created_at: string
+   updated_at: string
+@@ -101,7 +102,6 @@ export interface HandoverDocument {
+   generated_pdf_url: string | null
+   signed_pdf_url: string | null
+   signed_at: string | null
+-  condition_at_return: string | null
+   file_url: string | null
+   signed_by_employee: boolean
+   signed_by_admin: boolean

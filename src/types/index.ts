@@ -89,6 +89,7 @@ export interface AssetAssignment {
   status: string
   assignment_type: string
   due_date: string | null
+  condition_at_return: string | null
   notes: string | null
   created_at: string
   updated_at: string
@@ -101,7 +102,6 @@ export interface HandoverDocument {
   generated_pdf_url: string | null
   signed_pdf_url: string | null
   signed_at: string | null
-  condition_at_return: string | null
   file_url: string | null
   signed_by_employee: boolean
   signed_by_admin: boolean

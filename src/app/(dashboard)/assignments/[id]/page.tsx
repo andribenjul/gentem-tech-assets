@@ -150,6 +150,7 @@ export default function AssignmentDetailPage() {
         .update({
           returned_date: format(new Date(), "yyyy-MM-dd"),
           status: "Returned",
+          condition_at_return: conditionAtReturn || null,
         })
         .eq("id", id)
       if (assignError) throw assignError
@@ -579,13 +580,13 @@ export default function AssignmentDetailPage() {
                 </p>
               </div>
             )}
-            {handoverDoc?.condition_at_return && (
+            {assignment?.condition_at_return && (
               <div>
                 <Label className="text-muted-foreground">
                   Condition at Return
                 </Label>
                 <p className="font-medium">
-                  {handoverDoc.condition_at_return}
+                  {assignment.condition_at_return}
                 </p>
               </div>
             )}

@@ -315,6 +315,8 @@ export default function AssignmentsPage() {
                     const returnDoc = docs.find(
                       (d) => d.document_number?.startsWith("RET/")
                     )
+                    const bastUrl = bastDoc?.signed_pdf_url ?? bastDoc?.generated_pdf_url ?? null
+                    const returnUrl = returnDoc?.signed_pdf_url ?? returnDoc?.generated_pdf_url ?? null
 
                     return (
                       <TableRow key={assignment.id}>
@@ -339,7 +341,7 @@ export default function AssignmentsPage() {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
-                            {bastDoc?.generated_pdf_url ? (
+                            {bastUrl ? (
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button
@@ -347,7 +349,7 @@ export default function AssignmentsPage() {
                                     size="icon"
                                     className="h-8 w-8"
                                     onClick={() =>
-                                      window.open(bastDoc.generated_pdf_url!, "_blank")
+                                      window.open(bastUrl, "_blank")
                                     }
                                   >
                                     <FileText className="h-4 w-4" />
@@ -372,7 +374,7 @@ export default function AssignmentsPage() {
                                 <TooltipContent>BAST tidak tersedia</TooltipContent>
                               </Tooltip>
                             )}
-                            {returnDoc?.generated_pdf_url ? (
+                            {returnUrl ? (
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button
@@ -380,7 +382,7 @@ export default function AssignmentsPage() {
                                     size="icon"
                                     className="h-8 w-8"
                                     onClick={() =>
-                                      window.open(returnDoc.generated_pdf_url!, "_blank")
+                                      window.open(returnUrl, "_blank")
                                     }
                                   >
                                     <FileText className="h-4 w-4 text-orange-500" />
