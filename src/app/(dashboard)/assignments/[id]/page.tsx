@@ -234,16 +234,24 @@ export default function AssignmentDetailPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      const handoverDoc = assignment?.handover_documents?.[0]
-      if (handoverDoc?.generated_pdf_url) {
-        const filePath = handoverDoc.generated_pdf_url.split("/").pop()
-        if (filePath) {
-          await supabase.storage.from("bast-documents").remove([filePath])
+      for (const doc of assignment?.handover_documents ?? []) {
+        if (doc.generated_pdf_url) {
+          const path = doc.generated_pdf_url.split("/bast-documents/")[1]
+          if (path) {
+            await supabase.storage.from("bast-documents").remove([path])
+          }
+        }
+        if (doc.signed_pdf_url) {
+          const path = doc.signed_pdf_url.split("/signed-documents/")[1]
+          if (path) {
+            await supabase.storage.from("signed-documents").remove([path])
+          }
         }
       }
 
-      if (handoverDoc) {
-        await supabase.from("handover_documents").delete().eq("id", handoverDoc.id)
+      if (assignment?.handover_documents && assignment.handover_documents.length > 0) {
+        const ids = assignment.handover_documents.map((d) => d.id)
+        await supabase.from("handover_documents").delete().in("id", ids)
       }
 
       if (assignment?.asset_id) {
@@ -319,6 +327,68 @@ export default function AssignmentDetailPage() {
     },
   })
 
+  const uploadSignedReturnMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const returnDoc = assignment?.handover_documents?.find(
+        (d) => d.document_number?.startsWith("RET/")
+      )
+      if (!returnDoc) throw new Error("No return receipt document found")
+
+      const oldGeneratedUrl = returnDoc.generated_pdf_url
+      const filePath = `signed/${id}/return-${returnDoc.document_number}-signed.pdf`
+
+      const { error: uploadError } = await supabase.storage
+        .from("signed-documents")
+        .upload(filePath, file, {
+          contentType: "application/pdf",
+          upsert: true,
+        })
+
+      if (uploadError) throw uploadError
+
+      const { data: publicUrl } = supabase.storage
+        .from("signed-documents")
+        .getPublicUrl(filePath)
+
+      const { error: updateError } = await supabase
+        .from("handover_documents")
+        .update({
+          signed_pdf_url: publicUrl.publicUrl,
+          signed_at: new Date().toISOString(),
+          generated_pdf_url: null,
+        })
+        .eq("id", returnDoc.id)
+
+      if (updateError) throw updateError
+
+      if (oldGeneratedUrl) {
+        const path = oldGeneratedUrl.split("/bast-documents/")[1]
+        if (path) {
+          await supabase.storage.from("bast-documents").remove([path])
+        }
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["assignment", id] })
+      queryClient.invalidateQueries({ queryKey: ["assignments"] })
+      toast.success("Signed return receipt uploaded successfully!")
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to upload signed return receipt")
+    },
+  })
+
+  const handleReturnFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      if (file.type !== "application/pdf") {
+        toast.error("Please upload a PDF file")
+        return
+      }
+      uploadSignedReturnMutation.mutate(file)
+    }
+  }
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
@@ -380,7 +450,12 @@ export default function AssignmentDetailPage() {
     )
   }
 
-  const handoverDoc = assignment.handover_documents?.[0]
+  const handoverDoc = assignment.handover_documents?.find(
+    (d) => !d.document_number?.startsWith("RET/")
+  ) ?? assignment.handover_documents?.[0]
+  const returnDoc = assignment.handover_documents?.find(
+    (d) => d.document_number?.startsWith("RET/")
+  )
   const isOverdue =
     assignment.status === "Active" &&
     assignment.assignment_type === "Loan" &&
@@ -698,6 +773,132 @@ export default function AssignmentDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {returnDoc?.generated_pdf_url && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Return Receipt Document</CardTitle>
+            <CardDescription>
+              Generated return receipt document.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="border rounded-lg overflow-hidden max-h-[500px] overflow-y-auto">
+              <Document
+                file={returnDoc.generated_pdf_url}
+                onLoadSuccess={({ numPages }) => setNumPages(numPages)}
+                loading={
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  </div>
+                }
+                error={
+                  <div className="flex items-center justify-center py-8 text-muted-foreground">
+                    Failed to load PDF preview.
+                  </div>
+                }
+              >
+                {Array.from(new Array(numPages ?? 1), (_, index) => (
+                  <Page
+                    key={`page_${index + 1}`}
+                    pageNumber={index + 1}
+                    width={600}
+                  />
+                ))}
+              </Document>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() =>
+                window.open(returnDoc.generated_pdf_url!, "_blank")
+              }
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Download PDF
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {returnDoc && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Signed Return Receipt</CardTitle>
+            <CardDescription>
+              Upload the signed version of the return receipt document.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {returnDoc.signed_pdf_url ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Badge className="border-transparent bg-green-500 text-white">
+                    Already Signed
+                  </Badge>
+                </div>
+                <div className="border rounded-lg overflow-hidden max-h-[500px] overflow-y-auto">
+                  <Document
+                    file={returnDoc.signed_pdf_url}
+                    onLoadSuccess={({ numPages }) => setNumPages(numPages)}
+                    loading={
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      </div>
+                    }
+                    error={
+                      <div className="flex items-center justify-center py-8 text-muted-foreground">
+                        Failed to load PDF preview.
+                      </div>
+                    }
+                  >
+                    {Array.from(new Array(numPages ?? 1), (_, index) => (
+                      <Page
+                        key={`page_${index + 1}`}
+                        pageNumber={index + 1}
+                        width={600}
+                      />
+                    ))}
+                  </Document>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    window.open(returnDoc.signed_pdf_url!, "_blank")
+                  }
+                >
+                  <Eye className="mr-2 h-4 w-4" />
+                  View Signed PDF
+                </Button>
+                {returnDoc.signed_at && (
+                  <p className="text-sm text-muted-foreground">
+                    Signed on: {formatDate(returnDoc.signed_at)}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <Label htmlFor="return-signed-pdf">Upload Signed PDF</Label>
+                <div className="flex items-center gap-4">
+                  <Input
+                    id="return-signed-pdf"
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    onChange={handleReturnFileUpload}
+                    disabled={uploadSignedReturnMutation.isPending}
+                    className="max-w-sm"
+                  />
+                  {uploadSignedReturnMutation.isPending && (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Upload the PDF document that has been signed by both parties.
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Dialog open={showReturnDialog} onOpenChange={setShowReturnDialog}>
         <DialogContent>
