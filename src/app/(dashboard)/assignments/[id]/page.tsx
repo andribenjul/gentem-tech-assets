@@ -60,7 +60,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { Separator } from "@/components/ui/separator"
 import { ReturnReceipt } from "@/components/pdf/return-receipt"
-import type { AssetAssignment, Employee, Asset, HandoverDocument, Branch } from "@/types"
+import type { AssetAssignment, Employee, Asset, HandoverDocument, Branch, AssignmentAccessory } from "@/types"
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
@@ -110,6 +110,7 @@ export default function AssignmentDetailPage() {
   const [returnRoomId, setReturnRoomId] = useState("")
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [numPages, setNumPages] = useState<number | null>(null)
+  const [accessoryReturnStatus, setAccessoryReturnStatus] = useState<Record<string, { return_status: string; condition_at_return: string }>>({})
 
   const { data: assignment, isLoading } = useQuery({
     queryKey: ["assignment", id],
@@ -193,6 +194,12 @@ export default function AssignmentDetailPage() {
           conditionAtReturn={conditionAtReturn || ""}
           returnBranch={branch.name}
           returnRoom={room?.name ?? ""}
+          accessories={accessories?.map((a) => ({
+            name: a.name,
+            conditionAtHandover: a.condition_at_handover,
+            returnStatus: accessoryReturnStatus[a.id]?.return_status ?? null,
+            conditionAtReturn: accessoryReturnStatus[a.id]?.condition_at_return ?? null,
+          }))}
         />
       ).toBlob()
 
@@ -218,15 +225,32 @@ export default function AssignmentDetailPage() {
           generated_pdf_url: publicUrl.publicUrl,
         })
       if (docError) throw docError
+
+      if (accessories && accessories.length > 0) {
+        for (const acc of accessories) {
+          const status = accessoryReturnStatus[acc.id]
+          if (status) {
+            await supabase
+              .from("assignment_accessories")
+              .update({
+                return_status: status.return_status,
+                condition_at_return: status.condition_at_return || null,
+              })
+              .eq("id", acc.id)
+          }
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["assignment", id] })
       queryClient.invalidateQueries({ queryKey: ["assignments"] })
+      queryClient.invalidateQueries({ queryKey: ["assignment-accessories", id] })
       toast.success("Asset marked as returned successfully!")
       setShowReturnDialog(false)
       setConditionAtReturn("")
       setReturnBranchId("")
       setReturnRoomId("")
+      setAccessoryReturnStatus({})
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to mark as returned")
@@ -419,6 +443,18 @@ export default function AssignmentDetailPage() {
     },
   })
 
+  const { data: accessories } = useQuery({
+    queryKey: ["assignment-accessories", id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("assignment_accessories")
+        .select("*")
+        .eq("assignment_id", id)
+        .order("created_at")
+      return (data ?? []) as AssignmentAccessory[]
+    },
+  })
+
   const returnFilteredRooms =
     rooms?.filter((r) => r.branch_id === returnBranchId) ?? []
 
@@ -480,7 +516,14 @@ export default function AssignmentDetailPage() {
           {assignment.status === "Active" && (
             <Button
               variant="default"
-              onClick={() => setShowReturnDialog(true)}
+              onClick={() => {
+                const initial: Record<string, { return_status: string; condition_at_return: string }> = {}
+                accessories?.forEach((a) => {
+                  initial[a.id] = { return_status: "Returned", condition_at_return: "" }
+                })
+                setAccessoryReturnStatus(initial)
+                setShowReturnDialog(true)
+              }}
             >
               <Undo2 className="mr-2 h-4 w-4" />
               Mark as Returned
@@ -650,6 +693,65 @@ export default function AssignmentDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {accessories && accessories.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              Accessories
+              {assignment.status === "Returned" && accessories.some(
+                (a) => a.return_status === "Missing" || a.return_status === "Damaged"
+              ) && (
+                <Badge className="ml-2 border-transparent bg-red-500 text-white">
+                  {accessories.filter(
+                    (a) => a.return_status === "Missing" || a.return_status === "Damaged"
+                  ).length}{" "}
+                  issue(s)
+                </Badge>
+              )}
+            </CardTitle>
+            <CardDescription>
+              Items that accompany the asset.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {accessories.map((acc) => (
+                <div key={acc.id} className="flex items-center justify-between border rounded-md p-3">
+                  <div>
+                    <p className="font-medium">{acc.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      Initial condition: {acc.condition_at_handover}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    {acc.return_status ? (
+                      <Badge
+                        className={
+                          acc.return_status === "Returned"
+                            ? "border-transparent bg-green-500 text-white"
+                            : "border-transparent bg-red-500 text-white"
+                        }
+                      >
+                        {acc.return_status}
+                      </Badge>
+                    ) : assignment.status === "Active" ? (
+                      <Badge variant="outline">Not Returned Yet</Badge>
+                    ) : (
+                      <Badge variant="outline">Pending</Badge>
+                    )}
+                    {acc.condition_at_return && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Returned condition: {acc.condition_at_return}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {handoverDoc?.generated_pdf_url && (
         <Card>
@@ -968,6 +1070,63 @@ export default function AssignmentDetailPage() {
                 onChange={(e) => setConditionAtReturn(e.target.value)}
               />
             </div>
+            {accessories && accessories.length > 0 && (
+              <div className="space-y-3">
+                <Label>Accessories Return Status</Label>
+                {accessories.map((acc) => {
+                  const status = accessoryReturnStatus[acc.id]
+                  return (
+                    <div key={acc.id} className="border rounded-md p-3 space-y-2">
+                      <p className="font-medium text-sm">{acc.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Initial condition: {acc.condition_at_handover}
+                      </p>
+                      <div className="flex gap-2">
+                        <Select
+                          value={status?.return_status ?? "Returned"}
+                          onValueChange={(v) =>
+                            setAccessoryReturnStatus((prev) => ({
+                              ...prev,
+                              [acc.id]: {
+                                ...prev[acc.id],
+                                return_status: v,
+                                condition_at_return:
+                                  v !== "Returned" ? prev[acc.id]?.condition_at_return ?? "" : "",
+                              },
+                            }))
+                          }
+                        >
+                          <SelectTrigger className="w-40">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Returned">Returned</SelectItem>
+                            <SelectItem value="Missing">Missing</SelectItem>
+                            <SelectItem value="Damaged">Damaged</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {status?.return_status === "Damaged" && (
+                          <Input
+                            placeholder="Damage description"
+                            className="flex-1"
+                            value={status?.condition_at_return ?? ""}
+                            onChange={(e) =>
+                              setAccessoryReturnStatus((prev) => ({
+                                ...prev,
+                                [acc.id]: {
+                                  ...prev[acc.id],
+                                  condition_at_return: e.target.value,
+                                },
+                              }))
+                            }
+                          />
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button

@@ -19,7 +19,9 @@ import {
   ChevronsUpDown,
   Eye,
   Loader2,
+  Plus,
   Search,
+  X,
 } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
@@ -32,6 +34,7 @@ import {
   CardDescription,
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
@@ -75,6 +78,9 @@ export default function NewAssignmentPage() {
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null)
   const [showPdfModal, setShowPdfModal] = useState(false)
   const [numPages, setNumPages] = useState<number | null>(null)
+  const [accessories, setAccessories] = useState<{ name: string; condition: string }[]>([])
+
+  const QUICK_ACCESSORY_NAMES = ["Mouse", "Charger", "Tas Laptop", "Kabel HDMI", "Keyboard"]
 
   const form = useForm<FormValues>({
     resolver: zodResolver(assignmentSchema),
@@ -154,7 +160,7 @@ export default function NewAssignmentPage() {
     user?.user_metadata?.full_name ?? user?.email ?? "IT Admin"
 
   const generatePdfBlob = useCallback(
-    async (assignment: FormValues & { documentNumber: string }) => {
+    async (assignment: FormValues & { documentNumber: string; accessories: { name: string; condition: string }[] }) => {
       const blob = await pdf(
         <BastTemplate
           documentNumber={assignment.documentNumber}
@@ -181,6 +187,7 @@ export default function NewAssignmentPage() {
               : undefined
           }
           approverName={approverName}
+          accessories={assignment.accessories}
         />
       ).toBlob()
       return blob
@@ -227,6 +234,7 @@ export default function NewAssignmentPage() {
       const pdfBlob = await generatePdfBlob({
         ...values,
         documentNumber: docNumber,
+        accessories,
       })
 
       const filePath = `bast/${assignment.id}/${docNumber}.pdf`
@@ -256,6 +264,19 @@ export default function NewAssignmentPage() {
 
       if (handoverError) throw handoverError
 
+      if (accessories.length > 0) {
+        const { error: accError } = await supabase
+          .from("assignment_accessories")
+          .insert(
+            accessories.map((a) => ({
+              assignment_id: assignment.id,
+              name: a.name,
+              condition_at_handover: a.condition,
+            }))
+          )
+        if (accError) throw accError
+      }
+
       setPdfBlob(pdfBlob)
 
       return { assignment, handoverDoc, pdfBlob }
@@ -264,6 +285,7 @@ export default function NewAssignmentPage() {
       const url = URL.createObjectURL(pdfBlob)
       setPdfPreviewUrl(url)
       setShowPdfModal(true)
+      setAccessories([])
       queryClient.invalidateQueries({ queryKey: ["assignments"] })
       toast.success("Assignment created successfully!")
     },
@@ -570,6 +592,92 @@ export default function NewAssignmentPage() {
                   </FormItem>
                 )}
               />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Accessories (Optional)</CardTitle>
+              <CardDescription>
+                Add accessories or items that accompany the asset.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                {QUICK_ACCESSORY_NAMES.filter(
+                  (name) => !accessories.some((a) => a.name === name)
+                ).map((name) => (
+                  <Button
+                    key={name}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setAccessories((prev) => [
+                        ...prev,
+                        { name, condition: "Good" },
+                      ])
+                    }
+                  >
+                    <Plus className="mr-1 h-3 w-3" />
+                    {name}
+                  </Button>
+                ))}
+              </div>
+              {accessories.map((acc, index) => (
+                <div key={index} className="flex items-end gap-2">
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-sm">Name</Label>
+                    <Input
+                      value={acc.name}
+                      onChange={(e) => {
+                        const updated = [...accessories]
+                        updated[index] = { ...updated[index], name: e.target.value }
+                        setAccessories(updated)
+                      }}
+                      placeholder="Accessory name"
+                    />
+                  </div>
+                  <div className="w-36 space-y-1">
+                    <Label className="text-sm">Condition</Label>
+                    <Select
+                      value={acc.condition}
+                      onValueChange={(v) => {
+                        const updated = [...accessories]
+                        updated[index] = { ...updated[index], condition: v }
+                        setAccessories(updated)
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="New">New</SelectItem>
+                        <SelectItem value="Good">Good</SelectItem>
+                        <SelectItem value="Fair">Fair</SelectItem>
+                        <SelectItem value="Damaged">Damaged</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() =>
+                      setAccessories((prev) =>
+                        prev.filter((_, i) => i !== index)
+                      )
+                    }
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+              {accessories.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Click the chips above or type manually to add accessories.
+                </p>
+              )}
             </CardContent>
           </Card>
 

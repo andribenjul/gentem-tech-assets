@@ -111,6 +111,33 @@ const styles = StyleSheet.create({
     color: "#6b7280",
     marginTop: 4,
   },
+  accessoriesSection: {
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  accessoriesTable: {
+    marginTop: 4,
+  },
+  accessoriesTableHeader: {
+    flexDirection: "row",
+    backgroundColor: "#1e2a5e",
+    color: "#ffffff",
+    fontSize: 9,
+    padding: "4 8",
+  },
+  accessoriesTableHeaderCell: {
+    flex: 1,
+    fontWeight: "bold",
+  },
+  accessoriesTableRow: {
+    flexDirection: "row",
+    borderBottom: "1pt solid #e5e7eb",
+    padding: "4 8",
+    fontSize: 9,
+  },
+  accessoriesTableCell: {
+    flex: 1,
+  },
   footer: {
     position: "absolute",
     bottom: 0,
@@ -156,6 +183,7 @@ interface BastTemplateProps {
   purchaseDate?: string | null
   approverName?: string
   logoUrl?: string
+  accessories?: { name: string; condition: string }[]
 }
 
 export function BastTemplate({
@@ -180,6 +208,7 @@ export function BastTemplate({
   purchaseDate,
   approverName = "IT Admin",
   logoUrl = "/logo_gentem.png",
+  accessories = [],
 }: BastTemplateProps) {
   const isLoan = assignmentType === "Loan"
 
@@ -282,6 +311,24 @@ export function BastTemplate({
             </View>
           )}
         </View>
+
+        {accessories && accessories.length > 0 && (
+          <View style={styles.accessoriesSection}>
+            <Text style={styles.sectionTitle}>Kelengkapan / Aksesoris</Text>
+            <View style={styles.accessoriesTable}>
+              <View style={styles.accessoriesTableHeader}>
+                <Text style={styles.accessoriesTableHeaderCell}>Nama</Text>
+                <Text style={styles.accessoriesTableHeaderCell}>Kondisi</Text>
+              </View>
+              {accessories.map((acc, i) => (
+                <View key={i} style={styles.accessoriesTableRow}>
+                  <Text style={styles.accessoriesTableCell}>{acc.name}</Text>
+                  <Text style={styles.accessoriesTableCell}>{acc.condition}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Pernyataan Penerimaan</Text>

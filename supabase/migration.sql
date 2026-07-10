@@ -209,6 +209,23 @@ ALTER TABLE asset_images ENABLE ROW LEVEL SECURITY;
 ALTER TABLE asset_transfers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE employees ENABLE ROW LEVEL SECURITY;
 ALTER TABLE asset_assignments ENABLE ROW LEVEL SECURITY;
+-- 10. Assignment Accessories
+CREATE TABLE IF NOT EXISTS assignment_accessories (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  assignment_id UUID NOT NULL REFERENCES asset_assignments(id) ON DELETE CASCADE,
+  name VARCHAR(100) NOT NULL,
+  condition_at_handover VARCHAR(20) NOT NULL DEFAULT 'Good'
+    CHECK (condition_at_handover IN ('New','Good','Fair','Damaged')),
+  return_status VARCHAR(20) DEFAULT NULL
+    CHECK (return_status IN ('Returned','Missing','Damaged') OR return_status IS NULL),
+  condition_at_return VARCHAR(20),
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_assignment_accessories_assignment_id
+  ON assignment_accessories(assignment_id);
+
 ALTER TABLE handover_documents ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Authenticated users can read all branches" ON branches;
@@ -277,12 +294,21 @@ CREATE POLICY "Authenticated users can update assignments" ON asset_assignments 
 DROP POLICY IF EXISTS "Authenticated users can delete assignments" ON asset_assignments;
 CREATE POLICY "Authenticated users can delete assignments" ON asset_assignments FOR DELETE USING (auth.role() = 'authenticated');
 
+ALTER TABLE assignment_accessories ENABLE ROW LEVEL SECURITY;
+
 DROP POLICY IF EXISTS "Authenticated users can read all documents" ON handover_documents;
 CREATE POLICY "Authenticated users can read all documents" ON handover_documents FOR SELECT USING (auth.role() = 'authenticated');
 DROP POLICY IF EXISTS "Authenticated users can insert documents" ON handover_documents;
 CREATE POLICY "Authenticated users can insert documents" ON handover_documents FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 DROP POLICY IF EXISTS "Authenticated users can update documents" ON handover_documents;
 CREATE POLICY "Authenticated users can update documents" ON handover_documents FOR UPDATE USING (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Authenticated users can read accessories" ON assignment_accessories;
+CREATE POLICY "Authenticated users can read accessories" ON assignment_accessories
+  FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Authenticated users can manage accessories" ON assignment_accessories;
+CREATE POLICY "Authenticated users can manage accessories" ON assignment_accessories
+  FOR ALL USING (auth.role() = 'authenticated') WITH CHECK (auth.role() = 'authenticated');
 
 -- Storage Buckets for BAST documents
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

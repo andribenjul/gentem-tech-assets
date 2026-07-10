@@ -92,6 +92,40 @@ const styles = StyleSheet.create({
     color: "#6b7280",
     marginTop: 4,
   },
+  accessoriesSection: {
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  accessoriesTable: {
+    marginTop: 4,
+  },
+  accessoriesTableHeader: {
+    flexDirection: "row",
+    backgroundColor: "#1e2a5e",
+    color: "#ffffff",
+    fontSize: 9,
+    padding: "4 8",
+  },
+  accessoriesTableHeaderCell: {
+    flex: 1,
+    fontWeight: "bold",
+  },
+  accessoriesTableRow: {
+    flexDirection: "row",
+    borderBottom: "1pt solid #e5e7eb",
+    padding: "4 8",
+    fontSize: 9,
+  },
+  accessoriesTableCell: {
+    flex: 1,
+  },
+  accessoriesTableRowDamaged: {
+    flexDirection: "row",
+    borderBottom: "1pt solid #e5e7eb",
+    padding: "4 8",
+    fontSize: 9,
+    color: "#dc2626",
+  },
   footer: {
     position: "absolute",
     bottom: 0,
@@ -134,6 +168,7 @@ interface ReturnReceiptProps {
   returnRoom: string
   approverName?: string
   logoUrl?: string
+  accessories?: { name: string; conditionAtHandover: string; returnStatus: string | null; conditionAtReturn: string | null }[]
 }
 
 export function ReturnReceipt({
@@ -155,6 +190,7 @@ export function ReturnReceipt({
   returnRoom,
   approverName = "IT Admin",
   logoUrl = "/logo_gentem.png",
+  accessories = [],
 }: ReturnReceiptProps) {
   const isLoan = assignmentType === "Loan"
   const brandModel = [assetBrand, assetModel].filter(Boolean).join(" - ")
@@ -242,6 +278,31 @@ export function ReturnReceipt({
             pengembalian aset dinyatakan sah dan lengkap.
           </Text>
         </View>
+
+        {accessories.length > 0 && (
+          <View style={styles.accessoriesSection}>
+            <Text style={styles.sectionTitle}>Kelengkapan / Aksesoris</Text>
+            <View style={styles.accessoriesTable}>
+              <View style={styles.accessoriesTableHeader}>
+                <Text style={styles.accessoriesTableHeaderCell}>Nama</Text>
+                <Text style={styles.accessoriesTableHeaderCell}>Kondisi Awal</Text>
+                <Text style={styles.accessoriesTableHeaderCell}>Status</Text>
+                <Text style={styles.accessoriesTableHeaderCell}>Kondisi Kembali</Text>
+              </View>
+              {accessories.map((acc, i) => {
+                const isProblem = acc.returnStatus === "Missing" || acc.returnStatus === "Damaged"
+                return (
+                  <View key={i} style={isProblem ? styles.accessoriesTableRowDamaged : styles.accessoriesTableRow}>
+                    <Text style={styles.accessoriesTableCell}>{acc.name}</Text>
+                    <Text style={styles.accessoriesTableCell}>{acc.conditionAtHandover}</Text>
+                    <Text style={styles.accessoriesTableCell}>{acc.returnStatus ?? "-"}</Text>
+                    <Text style={styles.accessoriesTableCell}>{acc.conditionAtReturn ?? "-"}</Text>
+                  </View>
+                )
+              })}
+            </View>
+          </View>
+        )}
 
         <View style={styles.signatureSection}>
           <View style={styles.signatureColumn}>

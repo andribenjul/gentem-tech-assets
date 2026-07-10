@@ -110,3 +110,14 @@ export interface HandoverDocument {
   created_at: string
   updated_at: string
 }
+
+export interface AssignmentAccessory {
+  id: string
+  assignment_id: string
+  name: string
+  condition_at_handover: string
+  return_status: "Returned" | "Missing" | "Damaged" | null
+  condition_at_return: string | null
+  notes: string | null
+  created_at: string
+}
